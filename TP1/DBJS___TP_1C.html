@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Tableau de bord de notes - TP</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2rem; background: #fafafa; }
+        h1 { color: #333; }
+
+        .carte {
+            background: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+        }
+        .moyenne {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #1565c0;
+        }
+        .mention {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            border-radius: 6px;
+            font-weight: bold;
+            color: white;
+            margin-left: 0.5rem;
+        }
+        .mention-tb { background: #2e7d32; }   /* Très bien */
+        .mention-b  { background: #388e3c; }   /* Bien */
+        .mention-ab { background: #f9a825; }   /* Assez bien */
+        .mention-p  { background: #ef6c00; }   /* Passable */
+        .mention-i  { background: #c62828; }   /* Insuffisant */
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: white;
+            background: #c62828;
+            margin-left: 0.5rem;
+        }
+        .badge-ok { background: #2e7d32; }
+
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+        th { background: #eee; }
+        tr:hover { background: #f5f5f5; }
+
+        .barre-recherche { margin-bottom: 1rem; }
+        .barre-recherche input { padding: 0.4rem; width: 300px; }
+
+        button {
+            padding: 0.3rem 0.6rem;
+            cursor: pointer;
+            margin: 0 2px;
+        }
+        .note-rouge { color: #c62828; font-weight: bold; }
+        .note-verte { color: #2e7d32; font-weight: bold; }
+
+        .detail {
+            background: #f0f8ff;
+            padding: 0.6rem;
+            font-style: italic;
+            font-size: 0.9rem;
+        }
+
+        .form-ajout {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f5f5f5;
+            border-radius: 6px;
+        }
+        .form-ajout input {
+            margin-right: 0.5rem;
+            padding: 0.3rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+
+        <h1>📊 Tableau de bord de notes</h1>
+
+        <!-- 1 & 2. Moyenne + Mention -->
+        <div class="carte">
+            <div>
+                Moyenne générale :
+                <span class="moyenne">{{ moyenneGenerale.toFixed(2) }} / 20</span>
+
+                <!-- 2. Chaîne à 5 branches -->
+                <span v-if="moyenneGenerale >= 16" class="mention mention-tb">Très bien</span>
+                <span v-else-if="moyenneGenerale >= 14" class="mention mention-b">Bien</span>
+                <span v-else-if="moyenneGenerale >= 12" class="mention mention-ab">Assez bien</span>
+                <span v-else-if="moyenneGenerale >= 10" class="mention mention-p">Passable</span>
+                <span v-else class="mention mention-i">Insuffisant</span>
+            </div>
+        </div>
+
+        <!-- 5. Meilleur et moins bon module -->
+        <div class="carte">
+            <div v-if="modules.length === 0">Aucun module enregistré.</div>
+            <div v-else>
+                🏆 <strong>Meilleur module :</strong>
+                {{ moduleMax.nom }} ({{ moduleMax.note }}/20)
+                &nbsp;|&nbsp;
+                ⚠️ <strong>Moins bon module :</strong>
+                {{ moduleMin.nom }} ({{ moduleMin.note }}/20)
+            </div>
+        </div>
+
+        <!-- 3. Modules à rattraper -->
+        <div class="carte">
+            <strong>Modules à rattraper</strong>
+            <span class="badge" :class="{ 'badge-ok': modulesARattraper.length === 0 }">
+                {{ modulesARattraper.length }}
+            </span>
+            <ul v-if="modulesARattraper.length > 0">
+                <li v-for="m in modulesARattraper" :key="m.id" class="note-rouge">
+                    {{ m.nom }} — {{ m.note }}/20 (coef {{ m.coefficient }})
+                </li>
+            </ul>
+            <div v-else style="margin-top:0.5rem;">✅ Aucun module à rattraper.</div>
+
+            <!-- Aller plus loin : tousValides -->
+            <div style="margin-top:0.5rem;">
+                <span v-if="tousValides()" style="color:#2e7d32;">✔ Tous les modules sont validés.</span>
+                <span v-else style="color:#c62828;">✘ Certains modules ne sont pas validés.</span>
+            </div>
+        </div>
+
+        <!-- 4. Recherche + tableau -->
+        <div class="carte">
+            <div class="barre-recherche">
+                <input type="text" v-model="recherche" placeholder="Rechercher un module...">
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nom</th>
+                        <th>Note</th>
+                        <th>Coefficient</th>
+                        <th>Statut</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template v-for="m in modulesAffiches" :key="m.id">
+                        <tr>
+                            <td>{{ m.nom }}</td>
+                            <td :class="m.note < 10 ? 'note-rouge' : 'note-verte'">
+                                {{ m.note }}/20
+                            </td>
+                            <td>{{ m.coefficient }}</td>
+                            <td>
+                                <span v-if="m.note >= 10" style="color:#2e7d32;">Validé</span>
+                                <span v-else style="color:#c62828;">À rattraper</span>
+                            </td>
+                            <td>
+                                <button @click="toggleDetail(m)">Détail</button>
+                                <button @click="supprimerModule(m)">🗑️</button>
+                            </td>
+                        </tr>
+                        <!-- 6. Détail (un seul ouvert) -->
+                        <tr v-show="moduleOuvert === m.id">
+                            <td colspan="5" class="detail">
+                                <strong>{{ m.nom }}</strong> — Note : {{ m.note }}/20 —
+                                Coefficient : {{ m.coefficient }} —
+                                Contribution : {{ (m.note * m.coefficient).toFixed(2) }} points pondérés
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+
+            <div v-if="modulesAffiches.length === 0" style="margin-top:1rem; font-style:italic;">
+                Aucun module ne correspond à la recherche.
+            </div>
+
+            <!-- 6. Ajout d'un module -->
+            <div class="form-ajout">
+                <h3>Ajouter un module</h3>
+                <input v-model="nouveauModule.nom" placeholder="Nom du module">
+                <input v-model.number="nouveauModule.note" type="number" min="0" max="20" step="0.5" placeholder="Note">
+                <input v-model.number="nouveauModule.coefficient" type="number" min="1" placeholder="Coefficient">
+                <button @click="ajouterModule">Ajouter</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    // 4. Recherche
+                    recherche: '',
+
+                    // 6. Détail ouvert (id du module ou null)
+                    moduleOuvert: null,
+
+                    // 6. Nouveau module
+                    nouveauModule: { nom: '', note: 0, coefficient: 1 },
+
+                    // Compteur d'id
+                    prochainId: 6,
+
+                    // Liste des modules
+                    modules: [
+                        { id: 1, nom: 'Mathématiques', note: 15.5, coefficient: 4 },
+                        { id: 2, nom: 'Physique',      note: 8,    coefficient: 3 },
+                        { id: 3, nom: 'Informatique',  note: 17,   coefficient: 5 },
+                        { id: 4, nom: 'Anglais',       note: 12,   coefficient: 2 },
+                        { id: 5, nom: 'Sport',         note: 9,    coefficient: 1 }
+                    ]
+                };
+            },
+
+            computed: {
+                // 1. Moyenne pondérée avec reduce
+                moyenneGenerale() {
+                    const sommePonderee = this.modules.reduce(
+                        (acc, m) => acc + m.note * m.coefficient,
+                        0
+                    );
+                    const sommeCoefficients = this.modules.reduce(
+                        (acc, m) => acc + m.coefficient,
+                        0
+                    );
+                    if (sommeCoefficients === 0) return 0;
+                    return Math.round((sommePonderee / sommeCoefficients) * 100) / 100;
+                },
+
+                // 3. Modules à rattraper (note < 10)
+                modulesARattraper() {
+                    return this.modules.filter(m => m.note < 10);
+                },
+
+                // 4. Copie triée par note décroissante
+                modulesTries() {
+                    return [...this.modules].sort((a, b) => b.note - a.note);
+                },
+
+                // 4. Filtre selon la recherche (sur le nom)
+                modulesAffiches() {
+                    const texte = this.recherche.trim().toLowerCase();
+                    if (texte === '') return this.modulesTries;
+                    return this.modulesTries.filter(m =>
+                        m.nom.toLowerCase().includes(texte)
+                    );
+                },
+
+                // 5. Meilleur module (basé sur modulesTries, pas modulesAffiches)
+                moduleMax() {
+                    return this.modulesTries.length > 0 ? this.modulesTries[0] : null;
+                },
+
+                // 5. Moins bon module
+                moduleMin() {
+                    return this.modulesTries.length > 0
+                        ? this.modulesTries[this.modulesTries.length - 1]
+                        : null;
+                }
+            },
+
+            methods: {
+                // 6. Toggle détail (un seul à la fois)
+                toggleDetail(module) {
+                    this.moduleOuvert = (this.moduleOuvert === module.id) ? null : module.id;
+                },
+
+                // 6. Supprimer un module
+                supprimerModule(module) {
+                    const index = this.modules.indexOf(module);
+                    if (index !== -1) this.modules.splice(index, 1);
+                    if (this.moduleOuvert === module.id) this.moduleOuvert = null;
+                },
+
+                // 6. Ajouter un module
+                ajouterModule() {
+                    if (!this.nouveauModule.nom) {
+                        alert('Le nom du module est obligatoire.');
+                        return;
+                    }
+                    this.modules.push({
+                        id: this.prochainId++,
+                        nom: this.nouveauModule.nom,
+                        note: this.nouveauModule.note || 0,
+                        coefficient: this.nouveauModule.coefficient || 1
+                    });
+                    this.nouveauModule = { nom: '', note: 0, coefficient: 1 };
+                },
+
+                // Aller plus loin : tous les modules ont note >= 10 ?
+                tousValides() {
+                    return this.modules.every(m => m.note >= 10);
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

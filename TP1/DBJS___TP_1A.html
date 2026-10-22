@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TP – Budget étudiant</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 700px; margin: 2rem auto; padding: 1rem; }
+        h1 { color: #2c3e50; }
+        fieldset { margin-bottom: 1rem; padding: 1rem; border-radius: 6px; border: 1px solid #ccc; }
+        legend { font-weight: bold; padding: 0 0.5rem; }
+        input, select, button { padding: 0.4rem; margin: 0.2rem; }
+        .filtres button { margin-right: 0.4rem; cursor: pointer; }
+        .filtres button.active { background: #3498db; color: white; border: none; }
+        .depense { display: flex; justify-content: space-between; padding: 0.4rem; border-bottom: 1px solid #eee; }
+        .ok { color: green; font-weight: bold; }
+        .attention { color: orange; font-weight: bold; }
+        .depasse { color: red; font-weight: bold; }
+        .stats { background: #f4f6f7; padding: 1rem; border-radius: 6px; margin-top: 0.5rem; }
+        .vide { font-style: italic; color: #888; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <h1>💰 Budget étudiant</h1>
+
+    <!-- ============================================================
+         SECTION 1 : Formulaire d'ajout
+         ============================================================ -->
+    <fieldset>
+        <legend>Ajouter une dépense</legend>
+        <form @submit.prevent="ajouterDepense">
+            <input type="text" v-model="nouvelleDepense.titre" placeholder="Titre" required>
+            <input type="number" v-model.number="nouvelleDepense.montant" placeholder="Montant (€)" required>
+            <select v-model="nouvelleDepense.categorie">
+                <option value="Nourriture">Nourriture</option>
+                <option value="Loisirs">Loisirs</option>
+                <option value="Transport">Transport</option>
+                <option value="Logement">Logement</option>
+                <option value="Autres">Autres</option>
+            </select>
+            <button type="submit">Ajouter</button>
+        </form>
+    </fieldset>
+
+    <!-- ============================================================
+         Budget mensuel modifiable (Aller plus loin)
+         ============================================================ -->
+    <fieldset>
+        <legend>Budget mensuel (€)</legend>
+        <input type="number" v-model.number="budgetMensuel" min="0">
+    </fieldset>
+
+    <!-- ============================================================
+         SECTION 2 : Filtres par catégorie
+         ============================================================ -->
+    <fieldset>
+        <legend>Filtrer par catégorie</legend>
+        <div class="filtres">
+            <button
+                :class="{ active: filtreCategorie === 'toutes' }"
+                @click="selectionnerCategorie('toutes')">Toutes</button>
+
+            <button
+                v-for="cat in categories"
+                :key="cat"
+                :class="{ active: filtreCategorie === cat }"
+                @click="selectionnerCategorie(cat)">{{ cat }}</button>
+        </div>
+    </fieldset>
+
+    <!-- ============================================================
+         SECTION 3 : Totaux
+         ============================================================ -->
+    <fieldset>
+        <legend>Totaux</legend>
+        <p>Total filtré : <strong>{{ totalFiltre.toFixed(2) }} €</strong></p>
+        <p>Total général : <strong>{{ totalGeneral.toFixed(2) }} €</strong></p>
+        <p>Moyenne (filtrée) : <strong>{{ moyenneDepense.toFixed(2) }} €</strong></p>
+    </fieldset>
+
+    <!-- ============================================================
+         SECTION 4 : Alerte de budget (v-if / v-else-if / v-else)
+         ⚠️ Les 3 blocs doivent être strictement adjacents !
+         ============================================================ -->
+    <fieldset>
+        <legend>État du budget</legend>
+
+        <p v-if="totalGeneral < budgetMensuel * 0.8" class="ok">
+            ✅ Budget sous contrôle
+        </p>
+        <p v-else-if="totalGeneral <= budgetMensuel" class="attention">
+            ⚠️ Attention : proche de la limite
+        </p>
+        <p v-else class="depasse">
+            ❌ Budget dépassé !
+        </p>
+    </fieldset>
+
+    <!-- ============================================================
+         SECTION 5 : Détail par catégorie (v-show)
+         ============================================================ -->
+    <fieldset>
+        <legend>Statistiques</legend>
+        <button @click="afficherStats = !afficherStats">
+            {{ afficherStats ? 'Masquer' : 'Afficher' }} le détail par catégorie
+        </button>
+
+        <div v-show="afficherStats" class="stats">
+            <h3>Détail par catégorie</h3>
+            <ul>
+                <li v-for="cat in categories" :key="cat">
+                    {{ cat }} : <strong>{{ totalCategorie(cat).toFixed(2) }} €</strong>
+                </li>
+            </ul>
+        </div>
+    </fieldset>
+
+    <!-- ============================================================
+         SECTION 6 : Liste des dépenses + suppression
+         ============================================================ -->
+    <fieldset>
+        <legend>Mes dépenses</legend>
+
+        <div v-if="depensesFiltrees.length === 0" class="vide">
+            Aucune dépense à afficher.
+        </div>
+
+        <div v-else>
+            <div class="depense" v-for="d in depensesFiltrees" :key="d.id">
+                <span>
+                    <strong>{{ d.titre }}</strong>
+                    <em>({{ d.categorie }})</em>
+                </span>
+                <span>
+                    {{ d.montant.toFixed(2) }} €
+                    <button @click="supprimerDepense(d)">🗑️</button>
+                </span>
+            </div>
+        </div>
+    </fieldset>
+</div>
+
+<script>
+const { createApp } = Vue;
+
+createApp({
+    data() {
+        return {
+            // Budget mensuel (modifiable depuis l'interface)
+            budgetMensuel: 500,
+
+            // Nouvelle dépense en cours de saisie
+            nouvelleDepense: {
+                titre: '',
+                montant: 0,
+                categorie: 'Nourriture'
+            },
+
+            // Filtre actif
+            filtreCategorie: 'toutes',
+
+            // Visibilité du panneau de stats
+            afficherStats: false,
+
+            // Liste des catégories disponibles
+            categories: ['Nourriture', 'Loisirs', 'Transport', 'Logement', 'Autres'],
+
+            // Compteur pour générer des id uniques
+            prochainId: 4,
+
+            // Liste des dépenses
+            depenses: [
+                { id: 1, titre: 'Courses', montant: 45.50, categorie: 'Nourriture' },
+                { id: 2, titre: 'Cinéma', montant: 12, categorie: 'Loisirs' },
+                { id: 3, titre: 'Métro', montant: 25, categorie: 'Transport' }
+            ]
+        };
+    },
+
+    computed: {
+        // ---------- SECTION 2 : Filtre ----------
+        depensesFiltrees() {
+            if (this.filtreCategorie === 'toutes') {
+                return this.depenses;
+            }
+            return this.depenses.filter(d => d.categorie === this.filtreCategorie);
+        },
+
+        // ---------- SECTION 3 : Totaux ----------
+        totalFiltre() {
+            return this.depensesFiltrees.reduce((sum, d) => sum + d.montant, 0);
+        },
+
+        totalGeneral() {
+            return this.depenses.reduce((sum, d) => sum + d.montant, 0);
+        },
+
+        moyenneDepense() {
+            // ⚠️ Gestion de la division par zéro
+            if (this.depensesFiltrees.length === 0) return 0;
+            return this.totalFiltre / this.depensesFiltrees.length;
+        }
+    },
+
+    methods: {
+        // ---------- SECTION 1 : Ajout ----------
+        ajouterDepense() {
+            // Vérification minimale
+            if (!this.nouvelleDepense.titre || this.nouvelleDepense.montant <= 0) return;
+
+            this.depenses.push({
+                id: this.prochainId++,
+                titre: this.nouvelleDepense.titre,
+                montant: this.nouvelleDepense.montant,
+                categorie: this.nouvelleDepense.categorie
+            });
+
+            // Réinitialisation du formulaire
+            this.nouvelleDepense = {
+                titre: '',
+                montant: 0,
+                categorie: 'Nourriture'
+            };
+        },
+
+        // ---------- SECTION 6 : Suppression ----------
+        supprimerDepense(depense) {
+            const index = this.depenses.findIndex(d => d.id === depense.id);
+            if (index !== -1) this.depenses.splice(index, 1);
+        },
+
+        // ---------- SECTION 2 : Changement de filtre ----------
+        selectionnerCategorie(cat) {
+            this.filtreCategorie = cat;
+        },
+
+        // ---------- SECTION 5 : Total par catégorie ----------
+        totalCategorie(cat) {
+            return this.depenses
+                .filter(d => d.categorie === cat)
+                .reduce((sum, d) => sum + d.montant, 0);
+        }
+    }
+}).mount('#app');
+</script>
+</body>
+</html>

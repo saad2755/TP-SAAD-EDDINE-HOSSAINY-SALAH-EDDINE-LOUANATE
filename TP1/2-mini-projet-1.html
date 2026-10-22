@@ -1,1 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Projet 1-38</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        img {
+            float: left;
+            margin-right: 1rem;
+        }
+        .personne {
+            clear: left;
+            padding: 1rem;
+            border-bottom: 1px solid #ccc;
+        }
+        input[type="checkbox"], select {
+            margin-right: 1rem;
+        }
+        .misEnForme {
+            background: #e0ffff;
+            font-family: georgia;
+            font-size: 1.2rem;
+            margin: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <fieldset>
+            <legend>Filtre sur le nom</legend>
+            <input type="text" v-model="filtreNom" placeholder="Nom de famille...">
+        </fieldset>
 
+        <fieldset>
+            <legend>Options</legend>
+            Homme <input type="checkbox" v-model="homme">
+            Femme <input type="checkbox" v-model="femme">
+            Téléphone <input type="checkbox" v-model="tel">
+            Photo
+            <select v-model.number="taille">
+                <option :value="1">Petit</option>
+                <option :value="2">Moyen</option>
+                <option :value="3">Grand</option>
+            </select>
+            Mise en forme <input type="checkbox" v-model="mef">
+        </fieldset>
+
+        <div 
+            class="personne"
+            :class="{ misEnForme: mef }"
+            v-for="p in personnesFiltrees" 
+            :key="p.login.uuid"
+        >
+            <img v-if="taille === 1" :src="p.picture.thumbnail" alt="photo">
+            <img v-else-if="taille === 2" :src="p.picture.medium" alt="photo">
+            <img v-else :src="p.picture.large" alt="photo">
+
+            <strong>{{ p.name.title }} {{ p.name.first }} {{ p.name.last }}</strong><br>
+            <div>{{ p.location.country }}</div>
+
+            <!-- Infos sensibles : affichées seulement si tel est coché -->
+            <div v-if="tel">
+                📞 {{ p.phone }}<br>
+                ✉️ {{ p.email }}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    homme: true,
+                    femme: true,
+                    tel: false,       // caché par défaut (info sensible)
+                    mef: false,
+                    taille: 2,
+                    filtreNom: '',
+                    personnes: [
+                        {
+                            "gender": "female",
+                            "name": { "title": "Mrs", "first": "Elizabeth", "last": "Ambrose" },
+                            "location": { "country": "Canada" },
+                            "email": "elizabeth.ambrose@example.com",
+                            "login": { "uuid": "50777e60-394d-4951-b933-a2f78599065d" },
+                            "phone": "366-033-8063",
+                            "picture": {
+                                "large": "https://randomuser.me/api/portraits/women/49.jpg",
+                                "medium": "https://randomuser.me/api/portraits/med/women/49.jpg",
+                                "thumbnail": "https://randomuser.me/api/portraits/thumb/women/49.jpg"
+                            }
+                        },
+                        {
+                            "gender": "male",
+                            "name": { "title": "Mr", "first": "Batista", "last": "Silveira" },
+                            "location": { "country": "Brazil" },
+                            "email": "batista.silveira@example.com",
+                            "login": { "uuid": "5308f02b-7838-4b48-8114-2fe1349c0819" },
+                            "phone": "(53) 5553-2892",
+                            "picture": {
+                                "large": "https://randomuser.me/api/portraits/men/50.jpg",
+                                "medium": "https://randomuser.me/api/portraits/med/men/50.jpg",
+                                "thumbnail": "https://randomuser.me/api/portraits/thumb/men/50.jpg"
+                            }
+                        },
+                        {
+                            "gender": "male",
+                            "name": { "title": "Mr", "first": "Blaise", "last": "Adam" },
+                            "location": { "country": "Switzerland" },
+                            "email": "blaise.adam@example.com",
+                            "login": { "uuid": "3f7d9b90-8858-4986-bdf3-075df560ce31" },
+                            "phone": "079 493 00 77",
+                            "picture": {
+                                "large": "https://randomuser.me/api/portraits/men/29.jpg",
+                                "medium": "https://randomuser.me/api/portraits/med/men/29.jpg",
+                                "thumbnail": "https://randomuser.me/api/portraits/thumb/men/29.jpg"
+                            }
+                        }
+                    ]
+                };
+            },
+            computed: {
+                personnesFiltrees() {
+                    const filtre = this.filtreNom.trim().toLowerCase();
+                    return this.personnes.filter(p => {
+                        const estHomme = p.name.title === 'Mr';
+                        const estFemme = p.name.title === 'Mrs';
+
+                        // Filtre genre
+                        const genreOK = (this.homme && estHomme) || (this.femme && estFemme);
+
+                        // Filtre nom (insensible à la casse)
+                        const nomOK = filtre === '' || p.name.last.toLowerCase().includes(filtre);
+
+                        return genreOK && nomOK;
+                    });
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
